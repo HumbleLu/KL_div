@@ -3,9 +3,8 @@ Implementing Sasaki et al.'s work[1] in R.
 
 In here, I only implment the 2nd derivative case, i.e.
 
-```tex
-\frac{\partial^{2}}{\partial x_{i}^{2}} p(\textbf{\textit{x}})
-```
+
+$\frac{\partial^{2}}{\partial x_{i}^{2}} p(\textbf{\textit{x}) $
 
 
 Reference
