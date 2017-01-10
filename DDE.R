@@ -1,71 +1,109 @@
+library(compiler)
 library(MASS)
+library(flexclust)
 
 ## G matrix
-G_mtx<- function(X, sigma){
-  d<- nrow(X)
-  (pi * sigma^2)^(d/2) * exp(-1 * as.matrix(dist(X))^2/4*sigma^2)
-}
-
+G_mtx<- cmpfun(
+  function(X, sigma){
+    d<- ncol(X)
+    dist_mtx<- as.matrix(dist(X))
+    (pi * sigma^2)^(d/2) * exp(-dist_mtx^2/4*sigma^2)
+  }
+)
 
 ## psi: Guassian model
-psi_gauss<- function(x, X, sigma){
-  exp(apply(X, 1, function(y) sum((x - y)^2))/(-2 * sigma^2))
+psi_func<- function(X, sigma){
+  cmpfun(
+    function(x){
+      if(class(x) == "matrix"){
+        exp((dist2(x, X)^2)/(-2 * sigma^2))
+      }else{
+        exp(apply(X, 1, function(y) sum((x-y)^2))/(-2 * sigma^2))
+      }
+    }
+  )
 }
 
-
 ## psi_j: here the trace of Hessian matrix
-psi_2<- function(X, j, sigam){
-  function(x){
-    psi_gauss(x, X, 2) * ((x[j] - X[,j])^2 - sigma^2)/(-sigma^4)
-  }
+psi2_func<- function(X, j, sigma){
+  cmpfun(
+    function(x){
+      if(class(x) == "matrix"){
+        psi_func(X, sigma)(x) * (dist2(x[, j, drop = F], X[, j, drop = F])^2 - sigma^2)/(-sigma^4)
+      }else{
+        psi_func(X, sigma)(x) * ((x[j] - X[,j])^2 - sigma^2)/(-sigma^4)
+      }
+    }
+  )
 }
 
 # test
 # X<- matrix(rnorm(100), 5, 20)
 # G_mtx(X)
-# x<- rnorm(5)
-# psi_2(X, 5, x)(x)
+# xx<- matrix(rnorm(3 * 3), 3, 3)
+# yy<- matrix(rnorm(5 * 3), 5, 3)
+# g_func(yy, 1, 1, 1)(xx)
+# psi_func(yy, 1)(xx)
+# psi2_func(yy, 1, 1)(xx)
+
 
 ## Second derivative estimation
-g_func<- function(X, j, sigma, lambda){
-  n<- nrow(X)
-  h<- apply(apply(X, 1, function(x) psi_2(X, j, sigma)(x)), 1, mean)
-  theta_hat<- ginv(G_mtx(X, sigma) + lambda * diag(n)) %*% h
-  function(x) (t(theta_hat) %*% psi_gauss(x, X, sigma))[1,1]
+theta<- cmpfun(
+  function(X, j, sigma, lambda){
+    d<- ncol(X)
+    n<- nrow(X)
+    
+    # constructing h_j
+    mtx<- matrix(rep(X[, j, drop = F], n), ncol = n)
+    dist_mtx<- as.matrix(dist(X))
+    h<- apply(exp(dist_mtx^2/-2*sigma^2)/-4*sigma^2 * ((mtx - t(mtx))^2 - sigma^2), 2, mean)
+    
+    # get theta_j
+    solve(G_mtx(X, sigma) + lambda * diag(n)) %*% h
+  }
+)
+
+g_func<- function(X, j, sigma, lambda, theta_j = NULL){
+  # get theta_j
+  if(is.null(theta_j)){
+    theta_j<- theta(X, j, sigma, lambda)
+  }
+  cmpfun(
+    function(x){
+      psi<- psi_func(X, sigma)(x)
+      
+      if(class(psi) == "matrix"){
+        t(theta_j) %*% t(psi)
+      }else{
+        t(theta_j) %*% t(t(psi))
+      }
+    } 
+  )
 }
 
 # corss validation (hold-out)
 # TODO 
 # CV
-
-X_t<- X[-c(1:5),]
-x_t<- X[1:5,]
-
 CV_t<- function(X_t, x_t, j, sigma, lambda){
   d<- ncol(X_t)
   n<- nrow(X_t)
   
-  pairs<- as.data.frame(expand.grid(x = 1:n, y = 1:n))
-  pairs[pairs$x != pairs$y,]
+  theta_hat<- theta(X_t, j, sigma, lambda)
+  theta_prod<- tcrossprod(theta_hat)
   
-  h<- apply(apply(X_t, 1, function(x) psi_2(X_t, j, sigma)(x)), 1, mean)
-  theta_hat<- ginv(G_mtx(X_t, sigma) + lambda * diag(n)) %*% h
+  est_func<- g_func(X_t, j, sigma, lambda, theta_hat)
   
-  sum((theta_hat)^2 * (sqrt(pi)*sigma)^d) +
-    sum(
-      mapply(
-        function(i, j) 2 * theta_hat[i] * theta_hat[j] * (sqrt(pi)*sigma)^d * exp(sum((X[i,,drop = F] - X[j,,drop = F])^2/(-4*sigma^2))),
-        i = pairs$x,
-        j = pairs$y
-      )  
-    ) + 
-    sum(sapply(x_t, function(x) g_func(X_t, j, sigma, lambda)(x)))
+  (sqrt(pi)*sigma)^d * sum(theta_hat^2) +
+    sum(2 * (sqrt(pi)*sigma)^d * theta_prod[lower.tri(theta_prod)] * exp(as.vector(dist(X_t))/(-4*sigma^2))) -
+    (2/n) * sum(est_func(x_t))
 }
 
 CV<- function(X, j, sigma, lambda, t){
+  # t: number of partitions
+  
   n<- nrow(X)
-  start<- seq(1, n, t)
-  end<- seq(5, n, t)
+  start<- seq(1, n, n/t)
+  end<- seq(5, n, n/t)
   
   mean(
     mapply(function(s, e) CV_t(X[-c(s:e),,drop = F], X[s:e,,drop = F], j, sigma, lambda),
@@ -73,26 +111,3 @@ CV<- function(X, j, sigma, lambda, t){
            e = end)
   )
 }
-
-
-
-## cross validation
-X<- matrix(rnorm(5000*5), 5000, 5)
-
-sigma_cand<- 10^seq(-3, 1, length.out = 10)
-lambda_cand<- 10^seq(-1, 1, length.out = 10)
-pars<- expand.grid(x = sigma_cand, y = lambda_cand)
-
-sigma_opt<- sigma_cand[1]
-lambda_opt<- lambda_cand[1]
-cv_opt<- CV(X, 1, sigma_opt, lambda_opt, 5)
-
-for(i in 2: nrow(pars)){
-  cv_cur<- CV(X, 1, pars[i,1], pars[i,2], 5)
-  if(cv_cur< cv_opt){
-    cv_opt<- cv_cur
-    sigma_opt<- sigma_cand[i]
-    lambda_opt<- lambda_cand[i]
-  }
-}
-
