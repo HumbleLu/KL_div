@@ -86,7 +86,6 @@ g_func<- function(X, j, sigma, lambda, theta_j = NULL){
 # corss validation (hold-out)
 # TODO 
 # CV
-
 CV_t<- function(X_t, x_t, j, sigma, lambda){
   d<- ncol(X_t)
 
@@ -113,3 +112,25 @@ CV<- function(X, j, sigma, lambda, t){
   )
 }
 
+## cross validation, model selection
+cross_val<-function(X, sigma_cand, lambda_cand, j){
+  pars<- expand.grid(x = sigma_cand, y = lambda_cand)
+  
+  sigma_opt<- sigma_cand[1]
+  lambda_opt<- lambda_cand[1]
+  cv_opt<- CV(X, j, sigma_opt, lambda_opt, 10)
+  print(paste("sigma:", sigma_cand[1], ",lambda:", lambda_cand[1], ",CV: ", cv_opt))
+  
+  for(i in 2: nrow(pars)){
+    gc()
+    cv_cur<- CV(X, j, pars[i,1], pars[i,2], 10)
+    print(paste("sigma: ", pars[i,1], ",lambda: ", pars[i,2], ",CV: ", cv_cur))
+    if(cv_cur< cv_opt){
+      cv_opt<- cv_cur
+      sigma_opt<- pars[i,1]
+      lambda_opt<- pars[i,2]
+    }
+  }
+  
+  list(sigma = sigma_opt, lambda = lambda_opt)
+}
