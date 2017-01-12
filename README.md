@@ -1,5 +1,5 @@
 # Direct Density-Derivative Estimation (DDE.R)
-Implementing Sasaki et al.'s work[1] in R.
+Implementing Sasaki et al.'s work[1][2] in R.
 
 In here, I only implment the 2nd derivative case. The example provided by the original paper is in paper_example.R.
 
