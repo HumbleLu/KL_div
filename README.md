@@ -6,6 +6,7 @@ Implementing Sasaki et al.'s work[2][3] in R.
 
 In here, I only implment the 2nd derivative case. The example provided by the original paper is in paper_example.R.
 
+The paper example is in paper_example_DDE.R
 
 # Reference
   1. Pérez-Cruz, F. (2008, July). Kullback-Leibler divergence estimation of continuous distributions. In Information Theory, 2008. ISIT 2008. IEEE International Symposium on (pp. 1666-1670). IEEE.
