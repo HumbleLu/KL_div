@@ -1,5 +1,5 @@
 # Nearest neibor estimation of KL divergence (KL_nn.R)
-Algorithm is from Pérez-Cruz's paper.
+Algorithm is from Pérez-Cruz's paper[1].
 
 # Direct Density-Derivative Estimation (DDE.R)
 Implementing Sasaki et al.'s work[2][3] in R.
